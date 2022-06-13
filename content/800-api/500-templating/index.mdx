@@ -1,0 +1,19 @@
+---
+title: Templating
+---
+
+# Templating
+
+In addition to being able to do things using `shell` scripts and commands, `fn` also allows any string field to first to be interpreted as a `go txt/template` first.
+
+<Alert style={{marginBottom: "1em"}} variant="filled" severity="success">
+    <AlertTitle>A note about escaping</AlertTitle>
+
+    Use the following syntax to escape the Go txt/template mustache syntax:
+
+    ```Go
+    {{`{{ foo }}`}}
+    ```
+
+    Notice how we are encapsulating the actual value as a string literal inside the `{{ }}` block.
+</Alert>

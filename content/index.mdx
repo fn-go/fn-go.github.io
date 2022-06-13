@@ -1,0 +1,175 @@
+---
+slug: /
+title: Getting Started
+sidebar_position: 1
+---
+
+# About `fn`
+
+`fn` is a "function-oriented" general purpose automation tool that aims to be simpler and more flexible than similar tools such as Make, Task, and Rake.
+
+`fn` is a commandline program that runs `functions` defined in a `fnfile.yml`, similar to how you use `make` to run targets in a `Makefile`.
+
+## Basics
+
+An example to get you started:
+
+```yaml title="fnfile.yml"
+version: '0.1'
+fns:
+  hello: echo "Hello, World!"
+```
+
+```bash
+❯ fn hello
+Hello, World
+```
+
+## Understanding the `fnfile`
+
+The top-level `fns` is a map of defined functions. With the key being the name of the `fn`, and the value being one of several types, allowing you to express intent without requiring excessive syntax.
+
+### `fn` - Function Definition
+
+The common fields of an `fn` are:
+
+<Alert style={{marginBottom: "1em"}} variant="filled" severity="info">Check out the <a href="/api/fn">API Reference</a> for a complete list of fields</Alert>
+
+- `do` - The <a href="./api/steps/#do">`do`</a> step. _required**_
+- `dir` - The working directory when running shell steps. The _default_ is same directory as the `fnfile.yml`.
+
+### Common Steps
+
+<Alert style={{marginBottom: "1em"}} variant="filled" severity="info">Check out the <a href="/api/steps">Steps API Reference</a> for a complete list of available steps</Alert>
+
+#### `do`
+
+`Do` performs the given steps serially.
+
+```yaml
+do:
+  steps: <[]step>
+```
+
+#### `parallel`
+
+`Parallel` performs the given steps in parallel.
+
+```yaml
+parallel:
+  steps: <[]step>
+```
+
+#### `sh`
+
+`Sh` runs a shell command.
+
+```yaml
+sh:
+  run: <string>
+```
+
+### Flexible Nature
+
+The following tasks are all the same. The resolve to a single `sh` step, which runs a shell command.
+
+```yaml
+fns:
+  hello: echo "hello"
+  foo:
+  - echo "foo"
+  bar:
+    do: echo "bar"
+  baz:
+    do:
+    - echo "baz"
+  biz:
+    do:
+    - sh: echo "biz"
+  qux:
+    do:
+    - sh:
+        run: echo "qux"
+```
+
+### Why is this important?
+
+The design of `fn` is to get out of your way as quickly as possible. Meaning if you don't need certain functionality, you don't need to declare it or even make room for it. Let's break this down further with an example. The definition of a `sh` step:
+
+```yaml
+# VALID
+sh:
+  run: <string>
+  dir: <string, optional>
+```
+
+Since `dir` is an optional field, that leaves only 1 required field `run`, which is a `string`. Therefore, the entire step can be represented as just a string:
+
+```yaml
+# VALID
+sh: <string>
+```
+
+The definition of a `do` allows for an array of steps to be declared, each one to be run in sequence.
+
+```yaml
+# VALID
+do:
+  steps: <[]step>
+```
+
+The minimum useful `do` is that of 1 or more steps, so this representation becomes valid:
+
+```yaml
+# VALID
+do:
+- <step>
+```
+
+<Alert style={{marginBottom: "1em"}} variant="filled" severity="warning">Unfortunately, the next several representations are ambiguous, and thus are illegal syntax.</Alert>
+
+The bare minimum useful `do` is that of only 1 step, but this is invalid because of potential field conflict/ambiguity.
+
+```yaml
+# !INVALID - due to potential field conflict/ambiguity
+do: <step>
+```
+
+The most likely step, given the nature of `fn`, `make`, `task`, etc. is that of an external binary or script you wish to execute. We arrive at `sh` as our concrete `step` to choose. Though, this is still invalid because of potential field conflict/ambiguity.
+
+```yaml
+# !INVALID - due to potential field conflict/ambiguity
+do: <sh>
+```
+
+and since an `sh` step can be represented as a string:
+
+```yaml
+# VALID
+do: <string>
+```
+
+Furthermore, since a `fn` has only 1 "required" field, `do`, we can represent the entire `fn` definition as:
+
+```yaml
+# VALID
+fn: <string>
+```
+
+## Design Philosophy
+
+`fn` aims to have a human-centered design, with emphasis on usability and aesthetics.
+
+> Even the smartest among us can feel inept as we fail to figure out which light switch or oven burner to turn on, or whether to push, pull, or slide a door.
+The fault lies not in ourselves, but in product design that ignores the needs of users and the principles of cognitive psychology.
+>
+> The problems range from ambiguous and hidden controls to arbitrary relationships between controls and functions, coupled with a lack of feedback or other assistance and unreasonable demands on memorization.
+>
+> The rules are simple: make things visible, exploit natural relationships that couple function and control, and make intelligent use of constraints.
+>
+> The goal: guide the user effortlessly to the right action on the right control at the right time.
+>
+> -- <cite>[The Design of Everyday Things](https://www.uxmatters.com/mt/archives/2021/03/book-review-the-design-of-everyday-things.php)</cite>
+
+[//]: # (The `do` step was inspired by [ConcourseCI's do step]&#40;https://concourse-ci.org/do-step.html&#41;. I went one step further with reusing the same field in schema for `fn`. [Concourse uses `plan`]&#40;https://concourse-ci.org/jobs.html#schema.job.plan&#41; in its job schema, but it means the same as `do`, so I think this is a small optimization.)
+[//]: # (GitHub Actions Workflows &#40;and many others&#41; differentiate parallelism using `Jobs`, which run in parallel, and `Steps`, within a job, run serially. However, this causes a problem of indirection when you actually want to create a [`DAG`]&#40;https://en.wikipedia.org/wiki/Directed_acyclic_graph&#41;. I')

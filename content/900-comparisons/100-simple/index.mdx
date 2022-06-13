@@ -1,0 +1,412 @@
+---
+title: Simple Go
+---
+
+import { green, red } from '@mui/material/colors';
+import DoneIcon from '@mui/icons-material/Done';
+import DoneAllIcon from '@mui/icons-material/DoneAll';
+import DonutLargeIcon from '@mui/icons-material/DonutLarge';
+import ExpandLessIcon from '@mui/icons-material/ExpandLess';
+import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
+
+import KeyboardDoubleArrowUpIcon from '@mui/icons-material/KeyboardDoubleArrowUp';
+import KeyboardArrowUpIcon from '@mui/icons-material/KeyboardArrowUp';
+import KeyboardArrowDownIcon from '@mui/icons-material/KeyboardArrowDown';
+
+export const MidRating = ({children}) => (
+  <KeyboardArrowUpIcon sx={{ color: green[500] }}>
+    {children}
+  </KeyboardArrowUpIcon>
+);
+
+export const HighRating = ({children}) => (
+    <KeyboardDoubleArrowUpIcon sx={{ color: green[500] }}>
+        {children}
+    </KeyboardDoubleArrowUpIcon>
+);
+
+export const LowRating = ({children}) => (
+    <KeyboardArrowDownIcon sx={{ color: red[500] }}>
+        {children}
+    </KeyboardArrowDownIcon>
+);
+
+## Example Files
+
+### `Makefile`
+
+```
+# Borrowed from:
+# https://gist.github.com/turtlemonvh/38bd3d73e61769767c35931d8c70ccb4
+# Which borrowed from
+# https://github.com/silven/go-example/blob/master/Makefile
+# https://vic.demuzere.be/articles/golang-makefile-crosscompile/
+```
+
+```bash title="Makefile"
+BINARY      := superdo
+VET_REPORT  := vet.report
+TEST_REPORT := tests.xml
+GOARCH      := amd64
+
+VERSION ?= ?
+COMMIT  := $(shell git rev-parse HEAD)
+BRANCH  := $(shell git rev-parse --abbrev-ref HEAD)
+
+GITHUB_USERNAME := turtlemonvh
+BUILD_DIR       := ${GOPATH}/src/github.com/${GITHUB_USERNAME}/${BINARY}
+CURRENT_DIR     := $(shell pwd)
+BUILD_DIR_LINK  := $(shell readlink ${BUILD_DIR})
+
+LDFLAGS := -ldflags "-X main.VERSION=${VERSION} -X main.COMMIT=${COMMIT} -X main.BRANCH=${BRANCH}"
+
+.PHONY: %
+
+all: link clean test vet build
+
+link:
+	if [ "${BUILD_DIR_LINK}" != "${CURRENT_DIR}" ]; then \
+	    echo "Fixing symlinks for build"; \
+	    rm -f ${BUILD_DIR}; \
+	    ln -s ${CURRENT_DIR} ${BUILD_DIR}; \
+	fi
+
+build: build.linux build.darwin build.windows
+
+build.linux:
+	cd ${BUILD_DIR}; \
+	GOOS=linux GOARCH=${GOARCH} \
+	  go build ${LDFLAGS} -o ${BINARY}-linux-${GOARCH} .
+
+build.darwin:
+	cd ${BUILD_DIR}; \
+	GOOS=darwin GOARCH=${GOARCH} \
+	  go build ${LDFLAGS} -o ${BINARY}-darwin-${GOARCH} .
+
+build.windows:
+	cd ${BUILD_DIR}; \
+	GOOS=windows GOARCH=${GOARCH} \
+	  go build ${LDFLAGS} -o ${BINARY}-windows-${GOARCH}.exe .
+
+test:
+	if ! hash go2xunit 2>/dev/null; then go install github.com/tebeka/go2xunit; fi
+	cd ${BUILD_DIR}; \
+	go test -v ./... 2>&1 | go2xunit -output ${TEST_REPORT}
+
+vet:
+	cd ${BUILD_DIR}; \
+	go vet ./... > ${VET_REPORT} 2>&1
+
+fmt:
+	cd ${BUILD_DIR}; \
+	go fmt $$(go list ./... | grep -v /vendor/)
+
+clean:
+	-rm -f ${TEST_REPORT}
+	-rm -f ${VET_REPORT}
+	-rm -f ${BINARY}-*
+```
+
+### `Taskfile.yml`
+
+```yaml title="Taskfile.yml"
+version: "3"
+vars:
+  BINARY: superdo
+  VET_REPORT: vet.report
+  TEST_REPORT: tests.xml
+
+  VERSION: '{{env VERSION | default "?"}}'
+  COMMIT:
+    sh: git rev-parse HEAD
+  BRANCH:
+    sh: git rev-parse --abbrev-ref HEAD
+
+  GITHUB_USERNAME: turtlemonvh
+  BUILD_DIR: '{{expandenv "${GOPATH}/src/github.com/${GITHUB_USERNAME}/${BINARY}"}}'
+  CURRENT_DIR:
+    sh: pwd
+  BUILD_DIR_LINK:
+    sh: readlink "{{.BUILD_DIR}}"
+
+env:
+  GOARCH: amd64
+  LDFLAGS: -ldflags "-X main.VERSION={{.VERSION}} -X main.COMMIT={{.COMMIT}} -X main.BRANCH={{.BRANCH}}"
+
+tasks:
+  all:
+    cmds: [{ task: link }, { task: clean }, { task: test }, { task: vet }, { task: build }]
+
+  link:
+    status:
+    - [ "{{.BUILD_DIR_LINK}}" != "{{.CURRENT_DIR}}" ]
+    cmds:
+    - echo "Fixing symlinks for build"
+    - rm -f "{{.BUILD_DIR}}
+    - ln -s "{{.CURRENT_DIR}} {{.BUILD_DIR}}
+
+  build:
+    cmds: [{ task: build:linux }, { task: build:darwin }, { task: build:windows }]
+
+  build:os:
+    vars:
+      GOOS: '{{.GOOS | default "linux"}}'
+      BINARY_EXT: '{{.BINARY_EXT | default ""}}'
+    dir: "{{.BUILD_DIR}}"
+    cmds:
+    - |-
+      GOOS={{.GOOS}} GOARCH={{.GOARCH}} \
+      go build {{.LDFLAGS}} -o {{.BINARY}}-{{.GOOS}}-{{.GOARCH}}{{.BINARY_EXT}} .
+
+  build:linux:
+    cmds:
+    - task: build:os
+      vars:
+        GOOS: linux
+
+  build:darwin:
+    cmds:
+    - task: build:os
+      vars:
+        GOOS: darwin
+
+  build:windows:
+    cmds:
+    - task: build:os
+      vars:
+        GOOS: windows
+        BINARY_EXT: ".exe"
+
+  test:
+    cmds:
+    - if ! hash go2xunit 2>/dev/null; then go install github.com/tebeka/go2xunit; fi
+    - |-
+      cd ${BUILD_DIR}; \
+      go test -v ./... 2>&1 | go2xunit -output ${TEST_REPORT} ;
+
+  vet:
+    dir: "{{.BUILD_DIR}}"
+    cmds:
+    - go vet ./... > "{{.VET_REPORT}} 2>&1
+
+  fmt:
+    dir: "{{.BUILD_DIR}}"
+    cmds:
+    - go fmt ./...
+
+  clean:
+    dir: "{{.BUILD_DIR}}"
+    ignore_error: true
+    cmds:
+    - rm -f "{{.TEST_REPORT}}"
+    - rm -f "{{.VET_REPORT}}"
+    - rm -f "{{.BINARY}}-*"
+```
+
+### `fnfile.yml`
+
+```yaml title="fnfile.yml"
+version: "0.1"
+vars:
+  BINARY: superdo
+  VET_REPORT: vet.report
+  TEST_REPORT: tests.xml
+
+  VERSION: '{{env VERSION | default "?"}}'
+  COMMIT:
+    sh: git rev-parse HEAD
+  BRANCH:
+    sh: git rev-parse --abbrev-ref HEAD
+
+  GITHUB_USERNAME: turtlemonvh
+  BUILD_DIR: '{{expandenv "${GOPATH}/src/github.com/${GITHUB_USERNAME}/${BINARY}"}}'
+  CURRENT_DIR:
+    sh: pwd
+  BUILD_DIR_LINK:
+    sh: readlink {{.BUILD_DIR}}
+
+env:
+  GOARCH: amd64
+  LDFLAGS: -ldflags "-X main.VERSION={{.VERSION}} -X main.COMMIT={{.COMMIT}} -X main.BRANCH={{.BRANCH}}"
+
+fns:
+  all:
+    do: [{ fn: link }, { fn: clean }, { fn: test }, { fn: vet }, { fn: build:os }]
+
+  link:
+    do:
+    - if: [ "{{.V "BUILD_DIR_LINK"}}" != "{{.V "CURRENT_DIR"}}" ]
+      return:
+    - echo "Fixing symlinks for build"
+    - rm -f "{{.V "BUILD_DIR"}}
+    - ln -s "{{.V "CURRENT_DIR"}} {{.V "BUILD_DIR"}}
+
+  build:
+    matrix:
+      kvs:
+        GOOS: [linux, darwin, windows]
+    dir: '{{.V "BUILD_DIR"}}'
+    vars:
+      BINARY_EXT: '{{eq (.V "GOOS") "windows" | ternary ".exe" ""}}'
+    do: |-
+      GOOS={{.V "GOOS"}} GOARCH={{.V "GOARCH"}} \
+      go build {{.V "LDFLAGS"}} -o {{.V "BINARY"}}-{{.V "GOOS"}}-{{.V "GOARCH"}}{{.V "BINARY_EXT"}} .
+
+  test:
+  - if ! hash go2xunit 2>/dev/null; then go install github.com/tebeka/go2xunit; fi
+  - sh: go test -v ./... 2>&1 | go2xunit -output ${TEST_REPORT}
+    dir: '{{.V "BUILD_DIR"}}'
+
+  vet:
+    dir: '{{.V "BUILD_DIR"}}'
+    do: go vet ./... > "{{.V "VET_REPORT"}}" 2>&1
+
+  fmt:
+    dir: '{{.V "BUILD_DIR"}}'
+    do: go fmt ./...
+
+  clean:
+    dir: '{{.V "BUILD_DIR"}}'
+    do:
+    - sh: rm -f "{{.V "TEST_REPORT"}}"
+      onError: continue
+    - sh: rm -f "{{.V "VET_REPORT"}}"
+      onError: continue
+    - sh: rm -f "{{.V "BINARY"}}-*"
+      onError: continue
+```
+
+## Criteria
+
+### Clarity/Readability
+
+This particular `Makefile` isn't very long or using many advanced/confusing features or syntax, so personally, I think this Makefile is quite good.
+
+#### Dependencies
+
+So far so good, but if you are familiar with `task` or `make`, you may be asking yourself why I wrote the `Taskfile.yml` with this:
+
+```yaml
+  all:
+    cmds: [{ task: link }, { task: clean }, { task: test }, { task: vet }, { task: build }]
+  # ...
+  build:
+    cmds: [ {task: linux}, {task: darwin}, {task: windows}]
+```
+
+instead of
+
+```yaml
+  all:
+    deps: [link, clean, test, vet, build]
+  # ...
+  build:
+    deps: [linux, darwin, windows]
+```
+
+In short, I wanted to translate the original `Makefile` as accurately as possible.
+
+Without looking at [the documentation](https://taskfile.dev/usage/#task-dependencies), do you know what the difference is between `deps` and `cmds`?
+
+Do you know how `make` [processes dependencies](https://www.gnu.org/software/make/manual/html_node/Parallel.html#Parallel) such as in snippet below?
+
+```bash
+all: link clean test vet build
+```
+
+Finally, if I showed you this snippet, would you know what's going on?
+
+```yaml
+do: [ { fn: link }, { fn: clean }, { fn: test }, { fn: vet }, { fn: build } ]
+# vs
+parallel: [ { fn: link }, { fn: clean }, { fn: test }, { fn: vet }, { fn: build } ]
+```
+
+If you got this far without being tempted to click on the links, I'll fill you in:
+
+In a `Taskfile`, `deps` are a list of other `task` names, run in parallel and `cmds` are shell commands (if the value is a string), run serially. If you wish to run a `task` instead of shell command for a particular step in the `cmds` array, you can switch to using object notation, and then provide a `task` key and set the value to the name of the task, e.g. `task: "link"`. The name `deps` is short for `dependencies`, which at least provides relative ordering information between `cmds` and `deps`. Neither `cmds` nor `deps` provide _signifiers_ for parallelism.
+
+In a `Makefile`, by default, target dependencies run `serially`. But this changes if you provide the `-j` commandline option (affecting all targets in a `Makefile`). Furthermore, you can set a pseudo-target `.NOTPARALLEL` to inhibit parallelism for the entire makefile (regardless of whether `-j` is passed or not). `make` does not support parallelism for individual target dependencies. There are no _signifiers_ for parallelism in task, and without an explicit `.NOTPARALLEL` defined, a user could run `make `-j`, thus changing the behavior, and likely causing unforeseen problems from race conditions.
+
+In a `fnfile`, `do` represents a series of "steps" (of which there are several types), steps in `do` are run serially. `parallel` is another step type, similar to `do`, except it runs steps in, you guessed it, parallel.
+
+But what about `matrix`?
+
+`Matrix` is both a `step` type as well as a `fn` modifier. It's an advanced feature of `fn` that allows for the creation of _virtual_ `fns` based on the matrix. If the `parent` (e.g. `build`) is called, it will in turn, run the children (e.g. `build:linux`), by default serially, similar to that of the default behavior of `fn` (via `do`). The names of the children are calculated based on the matrix values. For more information on `matrix`, see the [Matrix Step API](/api/steps/#matrix). The children can be run individually as well either from the CLI or from other `fns`.
+
+#### Variable Assignments & Use
+
+A few points more are taken off for the `Makefile` for the following, which I barely noticed and actually had to update the example `Makefile` to use the proper assignment operator (`:=`):
+
+[Variable flavors](https://www.gnu.org/software/make/manual/html_node/Flavors.html#Flavors)
+
+- `=` a.k.a. `recursive expansion`
+- `:=` a.k.a. `simply expanded variables`
+- `?=` a.k.a. `conditional variable assignment`
+
+I think the `conditional` assignment operator makes some sense, because `?` signifies in some minor way a question. So it's not hard for me to come to the conclusion of "set if not already set". The other 2 assignment operators are confusing, and I would argue that the most common use case should also be the simplest. `simply expanded` assignment is that use case, but it requires an extra character (`:`).
+
+#### Error Handling
+
+Can you spot what's going on, and what the behavior is?
+
+```bash
+clean:
+	-rm -f ${TEST_REPORT}
+```
+
+It's the `-` prefix to `rm`. Here is [the documentation](https://web.mit.edu/gnu/doc/html/make_5.html#SEC46). This means "continue on error". I'm now curious how you would combine [`@`](https://web.mit.edu/gnu/doc/html/make_5.html#SEC43) and `-` prefixes...
+
+Regardless, this _looks_ like a syntax error to me, which should speak for itself regarding poor design for the sake of a more concise syntax.
+
+`Taskfile` is a lot better with an [`ignore_error`](https://taskfile.dev/usage/#ignore-errors) field that's settable at both the `task` level as well as for each individual item in `cmds`. But even the documentation points out a pitfall:
+
+> `ignore_error` can also be set for a task, which means errors will be suppressed for all commands/ Nevertheless, keep in mind that this option will not propagate to other tasks called either by `deps` or `cmds`!
+
+As of this writing, I'm still not sure if declaring `ignore_error` for each individual item is sufficient or not:
+
+```yaml
+cmds:
+- task: fail
+  ignore_error: true
+```
+
+`fn` actually takes a similar approach to `Go`, in that error handling should be explicit. The _default_ behavior is very similar to the following code:
+
+```go
+cmd := "do-something-that-fails"
+err := Sh(cmd)
+if err != nil {
+   return fmt.Errorf("sh: %s: %w", cmd, err)
+}
+```
+
+Providing a bit of context about the error that occurred (similar to that of a stack trace). Even better error handling is also on the roadmap.
+
+By providing `onError: continue` instead of just using a `boolean` (`true|false`) value, it allows me to expand behavior over time, similar to how this is possible when writing `Go` natively.
+
+### Maintainability
+
+The `Makefile` has a lot of repetition, and the limitations/design of `make` would likely cause a degradation of readability in order to achieve a more "DRY" result, and you may see this in later examples.
+
+The `Taskfile` also has a lot of repetition, due to the fact that it's written in `yaml`, and yaml has some extra requirements.
+
+The `fnfile`, also yaml, gains the advantage over the `Taskfile` because of the `matrix` feature, which allows for `build:*` tasks to be collapsed into a single entity. Additionally, a few extra lines are saved by allowing `do` to be [represented by a single string](/api/steps/#shortcuts) (instead of an array).
+
+### Lines of code
+
+With the `Makefile` coming in at `61`, `Taskfile.yml` at `91`, and `fnfile.yml` at `68`, the winner here is the `Makefile`. This example is a fairly simple example, I think the gap will widen in later examples.
+
+## Conclusion
+
+`fn` steps provide strong signifiers in the form of `do` and `parallel`, allowing the user to form a mental model of the expected behavior without requiring a manual. Additionally, an `fn` only has a top-level `do`, where all other steps are defined as well, which helps to inform the user of the order in which things will run. In later examples, we'll dig more into parallelism, how it can be described and controlled.
+
+`fn` makes variables clear and concise. In later examples, we'll get more into tricky situations when it comes to variable evaluation ordering.
+
+[`fn` never ignores errors unless they are _explicitly_ silenced.](https://peps.python.org/pep-0020/)
+
+| Criteria        | `make`        | `task`        | `fn`           | `winner` |
+|:----------------|:--------------|:--------------|:---------------|:---------|
+| clarity         | <LowRating /> | <MidRating /> | <HighRating /> | `fn`     |
+| maintainability | <LowRating /> | <MidRating /> | <HighRating /> | `fn`     |
+| lines           | `61`          | `90`          | `68`           | `make`   |
