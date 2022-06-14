@@ -84,7 +84,7 @@ const config = {
           //   label: 'API Reference',
           // },
           {
-            href: 'https://github.com/go-fn/fn',
+            href: 'https://github.com/fn-go/fn',
             label: 'GitHub',
             position: 'right',
           },
@@ -111,12 +111,12 @@ const config = {
               },
               {
                 label: 'Discord',
-                href: 'https://discordapp.com/invite/fn',
+                href: 'https://discord.gg/8gem8vuGZT',
               },
-              {
-                label: 'Twitter',
-                href: 'https://twitter.com/fn',
-              },
+              // {
+              //   label: 'Twitter',
+              //   href: 'https://twitter.com/fn',
+              // },
             ],
           },
         ],
