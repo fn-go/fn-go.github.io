@@ -8,7 +8,29 @@ sidebar_position: 1
 
 `fn` is a "function-oriented" general purpose automation tool that aims to be simpler and more flexible than similar tools such as Make, Task, and Rake.
 
-`fn` is a commandline program that runs `functions` defined in a `fnfile.yml`, similar to how you use `make` to run targets in a `Makefile`.
+`fn` is a commandline program that runs `functions` (shortened to `fns`) defined in a `fnfile.yml`, similar to how you use `make` to run targets in a `Makefile`.
+
+## Design Philosophy
+
+`fn` aims to have a human-centered design, with emphasis on usability and aesthetics.
+
+> Even the smartest among us can feel inept as we fail to figure out which light switch or oven burner to turn on, or whether to push, pull, or slide a door.
+The fault lies not in ourselves, but in product design that ignores the needs of users and the principles of cognitive psychology.
+
+The problems range from ambiguous and hidden controls to arbitrary relationships between controls and functions, coupled with a lack of feedback or other assistance and unreasonable demands on memorization.
+
+The rules are simple: make things visible, exploit natural relationships that couple function and control, and make intelligent use of constraints.
+
+The goal: guide the user effortlessly to the right action on the right control at the right time.
+
+-- <cite>[The Design of Everyday Things](https://www.uxmatters.com/mt/archives/2021/03/book-review-the-design-of-everyday-things.php)</cite>
+
+## What is a function?
+
+> Functions are "self-contained" modules of code that accomplish a specific task. Functions usually "take in" data, process it, and "return" a result.
+> Once a function is written, it can be used over and over and over again. Functions can be "called" from the inside of other functions.
+
+The very basic concept of "taking in" data and "returning a result" is lost by other tools, and indeed, I found myself constantly wanting to do this exact thing all the time.
 
 ## Basics
 
@@ -48,7 +70,7 @@ The common fields of an `fn` are:
 
 ```yaml
 do:
-  steps: <[]step>
+  steps: [ <STEP> ]
 ```
 
 #### `parallel`
@@ -57,7 +79,7 @@ do:
 
 ```yaml
 parallel:
-  steps: <[]step>
+  steps: [ <STEP> ]
 ```
 
 #### `sh`
@@ -88,13 +110,41 @@ fns:
     - sh: echo "biz"
   qux:
     do:
-    - sh:
-        run: echo "qux"
+      steps:
+      - echo "qux"
+  ipsum:
+    do:
+      steps:
+      - sh: echo "ipsum"
+  amet:
+    do:
+      steps:
+      - sh:
+-         run: echo "amet"
 ```
 
 ### Why is this important?
 
-The design of `fn` is to get out of your way as quickly as possible. Meaning if you don't need certain functionality, you don't need to declare it or even make room for it. Let's break this down further with an example. The definition of a `sh` step:
+The design of `fn` is to get out of your way as quickly as possible. Meaning if you don't need certain functionality, you don't need to declare it or even make room for it.
+
+Let's take a `fn` as an example of how we can some liberties without affecting functionality, requiring you to write a bunch of code, or affecting readability.
+
+The definition of a `fn` is that of a function definition, declaring among other things, what steps should take place. `fn` gives you a `do` as your "entrypoint" to declaring those steps.
+
+```yaml
+fns:
+  my-function:
+    do:
+      steps:
+      - sh:
+          run: echo "hello"
+```
+
+Here we are declaring a `do` with 1 step, that of an `sh` step when runs the shell command: `echo "hello"`.
+
+The first shortcut, is that for `sh`.
+
+The definition of a `sh` step:
 
 ```yaml
 # VALID
@@ -103,73 +153,69 @@ sh:
   dir: <string, optional>
 ```
 
-Since `dir` is an optional field, that leaves only 1 required field `run`, which is a `string`. Therefore, the entire step can be represented as just a string:
+Given that `run` is the only required field, you can shortcut this by simply using:
 
 ```yaml
-# VALID
 sh: <string>
 ```
 
-The definition of a `do` allows for an array of steps to be declared, each one to be run in sequence.
+Furthermore, since `sh` is very likely the most common thing you will likely be writing (since it is the step type that actually executes work), in many cases, we can shortcut this entirely to just:
 
 ```yaml
-# VALID
-do:
-  steps: <[]step>
+<string>
 ```
 
-The minimum useful `do` is that of 1 or more steps, so this representation becomes valid:
+So the first step is to reduce `sh` to just `sh: <string>`
 
-```yaml
-# VALID
-do:
-- <step>
+```diff
+  fns:
+    my-function:
+      do:
+        steps:
++       - sh: echo "hello"
+-       - sh:
+-           run: echo "hello"
 ```
 
-<Alert style={{marginBottom: "1em"}} variant="filled" severity="warning">Unfortunately, the next several representations are ambiguous, and thus are illegal syntax.</Alert>
+Furthermore, `fn` makes an assumption, that if it sees just a string in a place that would accept a `step`, that string is _assumed_ to be a `sh` step:
 
-The bare minimum useful `do` is that of only 1 step, but this is invalid because of potential field conflict/ambiguity.
-
-```yaml
-# !INVALID - due to potential field conflict/ambiguity
-do: <step>
+```diff
+  fns:
+    my-function:
+      do:
+        steps:
++       - echo "hello"
+-       - sh: echo "hello"
 ```
 
-The most likely step, given the nature of `fn`, `make`, `task`, etc. is that of an external binary or script you wish to execute. We arrive at `sh` as our concrete `step` to choose. Though, this is still invalid because of potential field conflict/ambiguity.
+But there's a few more optimizations to make. For one, you aren't using any other functionality of `do`, just the `steps` field. The `steps` field is also the most important part of a `do` step. So we can shortcut the entire `do` into _just_ an array, and not require you explicitly declare `steps`:
 
-```yaml
-# !INVALID - due to potential field conflict/ambiguity
-do: <sh>
+```diff
+  fns:
+    my-function:
+      do:
++     - echo "hello"
+-       steps:
+-       - echo "hello"
 ```
 
-and since an `sh` step can be represented as a string:
+Furthermore, if you have only 1 step, why should I force you to use an array?
 
-```yaml
-# VALID
-do: <string>
+```diff
+  fns:
+    my-function:
++     do: echo "hello"
+-     do:
+-     - echo "hello"
 ```
 
-Furthermore, since a `fn` has only 1 "required" field, `do`, we can represent the entire `fn` definition as:
+We can apply the same logic one more time, to declare an entire `fn` definition as that of a single `sh` step, with the following:
 
-```yaml
-# VALID
-fn: <string>
+```diff
+  fns:
++   my-function: echo "hello"
+-   my-function:
+-     do: echo "hello"
 ```
 
-## Design Philosophy
-
-`fn` aims to have a human-centered design, with emphasis on usability and aesthetics.
-
-> Even the smartest among us can feel inept as we fail to figure out which light switch or oven burner to turn on, or whether to push, pull, or slide a door.
-The fault lies not in ourselves, but in product design that ignores the needs of users and the principles of cognitive psychology.
->
-> The problems range from ambiguous and hidden controls to arbitrary relationships between controls and functions, coupled with a lack of feedback or other assistance and unreasonable demands on memorization.
->
-> The rules are simple: make things visible, exploit natural relationships that couple function and control, and make intelligent use of constraints.
->
-> The goal: guide the user effortlessly to the right action on the right control at the right time.
->
-> -- <cite>[The Design of Everyday Things](https://www.uxmatters.com/mt/archives/2021/03/book-review-the-design-of-everyday-things.php)</cite>
-
-[//]: # (The `do` step was inspired by [ConcourseCI's do step]&#40;https://concourse-ci.org/do-step.html&#41;. I went one step further with reusing the same field in schema for `fn`. [Concourse uses `plan`]&#40;https://concourse-ci.org/jobs.html#schema.job.plan&#41; in its job schema, but it means the same as `do`, so I think this is a small optimization.)
-[//]: # (GitHub Actions Workflows &#40;and many others&#41; differentiate parallelism using `Jobs`, which run in parallel, and `Steps`, within a job, run serially. However, this causes a problem of indirection when you actually want to create a [`DAG`]&#40;https://en.wikipedia.org/wiki/Directed_acyclic_graph&#41;. I')
+So for the simplest of things, there's really not much to write.

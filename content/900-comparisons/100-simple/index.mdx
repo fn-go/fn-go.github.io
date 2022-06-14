@@ -235,8 +235,9 @@ fns:
 
   link:
     do:
-    - if: [ "{{.V "BUILD_DIR_LINK"}}" != "{{.V "CURRENT_DIR"}}" ]
-      return:
+    - if:
+        cond: '[ "{{.V "BUILD_DIR_LINK"}}" != "{{.V "CURRENT_DIR"}}" ]'
+        return:
     - echo "Fixing symlinks for build"
     - rm -f "{{.V "BUILD_DIR"}}
     - ln -s "{{.V "CURRENT_DIR"}} {{.V "BUILD_DIR"}}
@@ -267,13 +268,12 @@ fns:
 
   clean:
     dir: '{{.V "BUILD_DIR"}}'
+    matrix:
+      file: [ "{{.V "TEST_REPORT"}}", "{{.V "VET_REPORT"}}", "{{.V "BINARY"}}-*" ]
     do:
-    - sh: rm -f "{{.V "TEST_REPORT"}}"
-      onError: continue
-    - sh: rm -f "{{.V "VET_REPORT"}}"
-      onError: continue
-    - sh: rm -f "{{.V "BINARY"}}-*"
-      onError: continue
+    - sh:
+        run: rm -f "{{.Matrix.file}}"
+        onError: continue
 ```
 
 ## Criteria

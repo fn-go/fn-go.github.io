@@ -6,9 +6,9 @@ const darkCodeTheme = require('prism-react-renderer/themes/dracula');
 
 /** @type {import('@docusaurus/types').Config} */
 const config = {
-  title: 'gofn',
+  title: 'fngo',
   tagline: 'Fn Awesome',
-  url: 'https://gofn.dev',
+  url: 'https://fngo.dev',
   baseUrl: '/',
   onBrokenLinks: 'throw',
   onBrokenMarkdownLinks: 'warn',
@@ -16,8 +16,8 @@ const config = {
 
   // GitHub pages deployment config.
   // If you aren't using GitHub pages, you don't need these.
-  organizationName: 'go-fn', // Usually your GitHub org/user name.
-  projectName: 'go-fn.github.io', // Usually your repo name.
+  organizationName: 'fn-go', // Usually your GitHub org/user name.
+  projectName: 'fn-go.github.io', // Usually your repo name.
 
   // Even if you don't use internalization, you can use this field to set useful
   // metadata like html lang. For example, if your site is Chinese, you may want
@@ -59,7 +59,7 @@ const config = {
         },
       },
       navbar: {
-        title: 'gofn',
+        title: 'fngo',
         logo: {
           alt: 'fn',
           src: 'img/logo.svg',
