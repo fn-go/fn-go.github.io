@@ -224,9 +224,6 @@ fns:
     - must: |-
         {{- mapSet (.V "all") (.V "key") emptyStruct }}
         {{- (.V "all") | encoding.toJson | os.WriteFile (.V "filename") }}
-    - return:
-        outputs:
-          hit: '{{ .V "hit" }}'
 
   hello:
     do:
