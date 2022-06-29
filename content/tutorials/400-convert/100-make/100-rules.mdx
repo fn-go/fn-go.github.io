@@ -169,7 +169,7 @@ fns:
           type: map
           value: |-
             {{- if (io.FileExists (.V "cacheFilename")) }}
-              {{- os.ReadFileAsJson (.V "cacheFilename") }}
+              {{- os.ReadFile (.V "cacheFilename") }}
             {{- end }}
         cacheHit:
           type: bool
