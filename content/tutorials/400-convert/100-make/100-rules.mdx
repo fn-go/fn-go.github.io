@@ -220,8 +220,7 @@ fns:
           value: '{{ mapHas (.V "all") (.V "key") }}'
     - return:
         if: '{{ .V "hit" }}'
-    - do:
-        tmpl: '{{ .V "do" }}'
+    - tmpl: '{{ .V "do" }}'
     - must: |-
         {{- mapSet (.V "all") (.V "key") emptyStruct }}
         {{- (.V "all") | encoding.toJson | os.WriteFile (.V "filename") }}
