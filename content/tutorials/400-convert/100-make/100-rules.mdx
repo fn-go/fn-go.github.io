@@ -205,22 +205,18 @@ fns:
     outputs:
       ok: bool
     do:
-    - with:
-        var: cacheHit
-        type: bool
-        value: |-
-          {{- $cacheKey := os.GlobPath (.V "pattern") | LHash1 }}'
-          {{- $filename := '.fn-cache/hello.json' }}
-          {{- if (io.FileExists $filename) }}
-            {{ $newCacheKey := os.ReadFile $filename | strings.TrimSpace }}
-            {{- $newCacheKey | os.WriteFile $filename }}
-            {{- eq $cacheKey $newCacheKey }}
-          {{- else -}}
-            false
-          {{- end }}
     - return:
         outputs:
-          ok: '{{ .V "cacheHit" }}'
+          ok: |-
+            {{- $cacheKey := os.GlobPath (.V "pattern") | LHash1 }}'
+            {{- $filename := '.fn-cache/hello.json' }}
+            {{- if (io.FileExists $filename) }}
+              {{- $newCacheKey := os.ReadFile $filename | strings.TrimSpace }}
+              {{- $newCacheKey | os.WriteFile $filename }}
+              {{- eq $cacheKey $newCacheKey }}
+            {{- else -}}
+              false
+            {{- end -}}
 
   hello:
     do:
