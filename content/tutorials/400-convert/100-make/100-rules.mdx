@@ -1,0 +1,250 @@
+---
+title: Rules
+---
+
+`Make` uses the term [`rule`](https://www.gnu.org/software/make/manual/make.html#Introduction):
+
+```bash title="Makefile"
+target … : prerequisites …
+	recipe
+	…
+	…
+```
+
+`Fn` uses the term... well `fn`, which is short for `function`.
+
+```yaml title="fnfile.yml"
+fns:
+  <fn>:
+    do: <steps>
+```
+
+## Prerequisites
+
+The following `Makefile` includes an `all` rule.
+
+```bash title="Makefile"
+build :
+	echo "building..."
+
+test :
+    echo "testing..."
+
+all : build test
+	echo "completed all"
+```
+
+```bash title="Result"
+$ make all
+building...
+testing...
+completed all
+```
+
+You can see that `all` depends on `build` and `test`, thus those run before `echo "completed all"` runs.
+
+In `fn` there's no distinction between dependencies and other steps.
+
+```yaml title="fnfile.yml"
+fns:
+  build:
+    do:
+    - sh:
+        run: echo "building..."
+
+  test:
+    do:
+    - sh:
+        run: echo "testing..."
+
+  all:
+   do:
+   - fn:
+       name: build
+   - fn:
+       name: test
+   - sh:
+       run: echo "completed all"
+```
+
+:::tip
+
+There are syntactic shortcuts that can be made in `fn` that can make definitions quite concise. For these tutorials, we'll be sticking with the full & explicit syntax in order to prevent possible confusion. You can find more information in the [./api/steps#shortcuts](steps API).
+
+:::
+
+### Out of date behavior
+
+> The criterion for being out of date is specified in terms of the prerequisites, which consist of file names separated by spaces.
+>
+> A target is out of date if it does not exist or if it is older than any of the prerequisites (by comparison of last-modification times). The idea is that the contents of the target file are computed based on information in the prerequisites, so if any of the prerequisites changes, the contents of the existing target file are no longer necessarily valid.
+>
+> - [Make Manual](https://www.gnu.org/software/make/manual/make.html#Rule-Syntax)
+
+This is where `make` and `fn` begin to differ significantly, mostly because of goals. `make` was designed as a tool to help simplify building of `c` programs. Thus it makes a lot of sense to be "file" oriented (for targets), and to use last-modification timestamps to skip steps when its unnecessary to rerun something.
+
+There is no default behavior in `fn` to skip `fn` runs. But there are ways of optimizing.
+
+```yaml title="fnfile.yml"
+fns:
+  first:
+    do:
+    - sh:
+        run: echo "first..."
+
+  build:
+    do:
+    - fn:
+        name: first
+    - sh:
+        run: echo "building..."
+
+  test:
+    do:
+    - fn:
+        name: first
+    - fn:
+        name: build
+    - echo "testing..."
+```
+
+```bash title="Result"
+$ fn test
+first...
+first...
+building...
+testing...
+```
+
+How can we avoid running `first` multiple times? Introducing...
+
+### Memoization
+
+If `first` is smart enough to know that it will _never_ need to run multiple times, then it can control it's own destiny with...
+
+```diff title="fnfile.yml"
+  fns:  
+    first:  
++     memoize: true
+      do:  
+      - sh:  
+          run: echo "first..."  
+```
+
+> A [`memoized` function](https://en.wikipedia.org/wiki/Memoization) (not to be confused with `memorize`) "remembers" the results corresponding to some set of specific inputs. Subsequent calls with remembered inputs return the remembered result rather than recalculating it, thus eliminating the primary cost of a call with given parameters from all but the first call made to the function with those parameters.
+>
+> - Wikipedia
+
+We'll go over `fn` inputs and outputs later. This example in particular has no inputs.
+
+```bash title="Result"
+$ fn test
+first...
+building...
+testing...
+```
+
+:::note
+
+📌 `TODO` Look at memoization + dependency injection as a dynamic way to control this behavior...
+
+:::
+
+### Caching
+
+`fn` doesn't natively perform any caching or checking for changes/timestamps like `make` does. But that doesn't mean this functionality is out of reach.
+
+`fn`, like `go`, aims to provide a "standard library" of tools and step types that are general purpose enough to allow you to express yourself, while still being simple, explicit, and intuitive in nature. The following example is a bit more advanced, so make sure you've had a chance to visit the [advanced tutorials](./tutorials/advanced) first. Please also consult the [steps API](./api/steps), and [templating API](./api/templating) for additional information.
+
+Below is an example of how you can implement caching behavior:
+
+```yaml title="fnfile.yml"
+fns:
+  hello:
+    do:
+    - with:
+        var: cacheKey
+        type: string
+        value: '{{ "hello.txt" | Hash1 }}'
+    - with:
+        var: cacheHit
+        type: bool
+        value: |-
+          {{- $cacheKey := os.GlobPath (.V "pattern") | LHash1 }}'
+          {{- $filename := '.fn-cache/hello.json' }}
+          {{- if (io.FileExists $filename) }}
+            {{- $newCacheKey := os.ReadFile $filename | strings.TrimSpace }}
+            {{- $newCacheKey | os.WriteFile $filename }}
+            {{- eq $cacheKey $newCacheKey }}
+          {{- else -}}
+            false
+          {{- end -}}
+    - return:
+        if:
+          cond: '{{ .V "cacheHit" }}'
+    - sh:
+        run: echo "test" > hello.txt
+
+  repeat:
+    do:
+    - fn:
+        name: hello
+    - fn:
+        name: hello
+```
+
+Of course, you don't need to repeat this for every `fn`, you can do something like this:
+
+```yaml title="fnfile.yml"
+fns:
+  cache:
+    inputs:
+      pattern:
+        type: string
+        default: '**/*.txt'
+    outputs:
+      ok: bool
+    do:
+    - with:
+        var: cacheHit
+        type: bool
+        value: |-
+          {{- $cacheKey := os.GlobPath (.V "pattern") | LHash1 }}'
+          {{- $filename := '.fn-cache/hello.json' }}
+          {{- if (io.FileExists $filename) }}
+            {{ $newCacheKey := os.ReadFile $filename | strings.TrimSpace }}
+            {{- $newCacheKey | os.WriteFile $filename }}
+            {{- eq $cacheKey $newCacheKey }}
+          {{- else -}}
+            false
+          {{- end }}
+    - return:
+        outputs:
+          ok: '{{ .V "cacheHit" }}'
+
+  hello:
+    do:
+    - with:
+        var: cacheOutput
+        value:
+          fn:
+            name: cache
+    - return:
+        if:
+          cond: '{{ (.V "cacheOutput").ok }}'
+    - sh:
+        run: echo "test" > hello.txt
+
+  repeat:
+    do:
+    - fn:
+        name: hello
+    - fn:
+        name: hello
+```
+
+:::tip
+
+Anytime you see a field that accepts one or more `step`'s, you can also use a `sh` step to get down to a go text-templated shell script.
+
+:::

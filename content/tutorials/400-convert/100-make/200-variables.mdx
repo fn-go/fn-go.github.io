@@ -1,0 +1,181 @@
+---
+title: Variables
+---
+
+## Flavors
+
+`Make` has several ways in which a variable can be declared and how it's value is defined.
+
+### Static (Unconditional) / Simply Expanded
+
+```bash title="Makefile"
+BINARY      := superdo
+VET_REPORT  := vet.report
+TEST_REPORT := tests.xml
+GOARCH      := amd64
+
+GITHUB_USERNAME  := turtlemonvh
+GITHUB_REPO_LONG := github.com/${GITHUB_USERNAME}/${BINARY}
+```
+
+What we are seeing here are explicitly defined values, thus any `env` variable set in the environment of the same name (e.g. `BINARY`) have no effect on this Makefile.
+
+> The value of a simply expanded variable is scanned once and for all, expanding any references to other variables and functions, when the variable is defined. The actual value of the simply expanded variable is the result of expanding the text that you write. It does not contain any references to other variables; it contains their values as of the time this variable was defined.
+
+Similarly, a `fnfile.yml` allows for explicitly defined values. `fn` uses golang txt templating to provide access to other variables.
+
+```yaml title="fnfile.yml"
+vars:
+  BINARY: superdo
+  VET_REPORT: vet.report
+  TEST_REPORT: tests.xml
+  GOARCH: amd64
+
+  GITHUB_USERNAME: turtlemonvh
+  GITHUB_REPO_LONG: github.com/{{ .V "GITHUB_USERNAME" }}/{{ .V "BINARY" }}
+```
+
+:::tip
+
+If you need to store a string that _looks_ like a go txt template, you can escape the `{{ }}` syntax as follows. Once a variable is evaluated, it will not be evaluated again, so you don't need to worry about any funny business.
+
+```yaml title="fnfile.yml"
+vars:
+  FOO: '{{`{{FOO}}`}}'
+fns:
+  foo:
+    do:
+    - sh:
+        run: echo '{{.V "FOO" }}'
+```
+
+```bash
+$ fn foo
+{{FOO}}
+```
+
+:::
+
+### Conditional (FromEnv)
+
+> Variables in `make` can come from the environment in which `make` is run. Every environment variable that `make` sees when it starts up is transformed into a `make` variable with the same name and value. However, an explicit assignment in the Makefile, or with a command argument, overrides the environment.
+
+In the example below, `FOO` will have the value of `bar` only if `FOO` isn't defined in the environment in which `make` is run, whereas, `BAZ` will always have the value `qux` regardless if `BAZ` is defined in the environment.
+
+```bash title="Makefile"
+FOO ?= bar
+BAZ := qux
+```
+
+The default behavior of `fn` is more similar to `:=`, thus, to make a variable conditional, you can use golang txt templating. For more information on templating, see the [templating api](./api/templating).
+
+```yaml title="fnfile.yml"
+vars:
+  FOO: '{{env "FOO" | default "bar"}}'
+  BAZ: qux
+```
+
+An alternative syntax:
+
+```yaml title="fnfile.yml"
+vars:
+  FOO:
+    fromEnv: true
+    default: bar
+  BAZ: qux
+```
+
+### Recursive Expansion / Lazy
+
+`Make` describes "recursively expanded" as a variable flavor. Variables in `fn` aren't "expanded" like they would be in Bash or Make. Instead, they operate very much like variables would in a typical programming language.
+
+In this example,
+
+```bash title="Makefile"
+foo = $(bar)
+bar = $(ugh)
+ugh = Huh?
+
+all :
+	echo $(foo)
+```
+
+```bash title="Result"
+$ make all
+Huh?
+```
+
+In `fn`, when you reference another variable, the value of that variable also must be evaluated.
+
+:::info
+
+Variables in `fn` are also **_lazily_** evaluated. Unless a variable is used during the course of the run of a `fn`, it won't be evaluated at all. It also means that there's no need to declare global variables in any specific order in your `fnfile.yml`.
+
+:::
+
+
+```yaml title="fnfile.yml"
+vars:
+  foo: '{{.V "bar"}}'
+  bar: '{{.V "ugh"}}'
+  ugh: Huh?
+
+fns:
+  all:
+    do:
+    - sh:
+        run: echo {{.V "ugh"}}
+```
+
+```bash title="Result"
+$ fn all
+Huh?
+```
+
+Make has a limitation in variable scoping though, which means that this example:
+
+```bash title="Makefile"
+CFLAGS = $(CFLAGS) -O
+```
+
+will cause an infinite loop, which `make` detects and reports as an error.
+
+In `fn`, things are a little different, in that you can reference a variable (and reassign it's) value if the variable was previously declared.
+
+```yaml title="fnfile.yml"
+vars:
+  foo: 'hello'
+
+fns:
+  all:
+    do:
+    - with:
+        var: "foo"
+        value: '{{ printf "%s %s" (.V "foo") "world" }}'
+    - sh:
+        run: echo {{.V "foo"}}
+```
+
+Notice that in the above example, `foo` has been declared previously in the global scope, which is why there's no infinite loop. Note that this method, only affects the value of `foo` for subsequent and child steps of `with`. Below is a demonstration of how `with` acts kind of like `context.WithValue
+
+```yaml title="fnfile.yml"
+vars:
+  foo: 'hello'
+
+fns:
+  all:
+    do:
+    - sh:
+        run: echo {{.V "foo"}}
+    - with:
+        var: "foo"
+        value: '{{ printf "%s %s" (.V "foo") "world" }}'
+    - sh:
+        run: echo {{.V "foo"}}
+```
+
+```bash title="Result"
+$ fn all
+hello
+hello world
+```
