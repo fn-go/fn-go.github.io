@@ -163,27 +163,27 @@ fns:
   hello:
     do:
     - with:
-        var: cacheKey
-        type: string
-        value: '{{ "hello.txt" | Hash1 }}'
-    - with:
-        var: cacheHit
-        type: bool
-        value: |-
-          {{- $cacheKey := os.GlobPath (.V "pattern") | LHash1 }}'
-          {{- $filename := '.fn-cache/hello.json' }}
-          {{- if (io.FileExists $filename) }}
-            {{- $newCacheKey := os.ReadFile $filename | strings.TrimSpace }}
-            {{- $newCacheKey | os.WriteFile $filename }}
-            {{- eq $cacheKey $newCacheKey }}
-          {{- else -}}
-            false
-          {{- end -}}
+        cacheKey: '{{ "hello.txt" | Hash1 }}'
+        cacheFilename: '.fn-cache/cache.json'
+        cacheAll:
+          type: map
+          value: |-
+            {{- if (io.FileExists (.V "cacheFilename")) }}
+              {{- os.ReadFileAsJson (.V "cacheFilename") }}
+            {{- end }}
+        cacheHit:
+          type: bool
+          value: '{{ mapHas (.V "cacheAll") (.V "cacheKey") }}'
     - return:
         if:
           cond: '{{ .V "cacheHit" }}'
     - sh:
+        run: sleep 10
+    - sh:
         run: echo "test" > hello.txt
+    - must: |-
+        {{- mapSet (.V "cacheAll") (.V "cacheKey") emptyStruct }}
+        {{- (.V "cacheAll") | encoding.toJson | os.WriteFile (.V "cacheFilename") }}
 
   repeat:
     do:
@@ -193,43 +193,55 @@ fns:
         name: hello
 ```
 
-Of course, you don't need to repeat this for every `fn`, you can do something like this:
+Of course, you don't need to repeat this for every `fn` you write. Here's an example of the decorator pattern:
 
 ```yaml title="fnfile.yml"
 fns:
-  cache:
+  with-cache:
     inputs:
       pattern:
         type: string
-        default: '**/*.txt'
-    outputs:
-      ok: bool
+        default: '**/*'
+      do:
+        type: step
+        required: true
     do:
+    - with:
+        filename: '.fn-cache/cache.json'
+        key: '{{ os.GlobPath (.V "pattern") | LHash1 }}'
+        all:
+          type: map
+          value: |-
+            {{- if (io.FileExists (.V "filename")) }}
+              {{- os.ReadFile (.V "filename") }}
+            {{- end }}
+        hit:
+          type: bool
+          value: '{{ mapHas (.V "all") (.V "key") }}'
+    - return:
+        if: '{{ .V "hit" }}'
+    - do:
+        tmpl: '{{ .V "do" }}'
+    - must: |-
+        {{- mapSet (.V "all") (.V "key") emptyStruct }}
+        {{- (.V "all") | encoding.toJson | os.WriteFile (.V "filename") }}
     - return:
         outputs:
-          ok: |-
-            {{- $cacheKey := os.GlobPath (.V "pattern") | LHash1 }}'
-            {{- $filename := '.fn-cache/hello.json' }}
-            {{- if (io.FileExists $filename) }}
-              {{- $newCacheKey := os.ReadFile $filename | strings.TrimSpace }}
-              {{- $newCacheKey | os.WriteFile $filename }}
-              {{- eq $cacheKey $newCacheKey }}
-            {{- else -}}
-              false
-            {{- end -}}
+          hit: '{{ .V "hit" }}'
 
   hello:
     do:
     - with:
-        var: cacheOutput
-        value:
-          fn:
-            name: cache
-    - return:
-        if:
-          cond: '{{ (.V "cacheOutput").ok }}'
-    - sh:
-        run: echo "test" > hello.txt
+        filename: hello.txt
+    - fn:
+        name: with-cache
+        inputs:
+          pattern: '{{ .V "filename" }}'
+          do:
+          - sh:
+              run: sleep 10
+          - sh:
+              run: echo "test" > '{{ .V "filename" }}'
 
   repeat:
     do:

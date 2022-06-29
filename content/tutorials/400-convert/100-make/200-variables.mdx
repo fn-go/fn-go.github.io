@@ -150,8 +150,7 @@ fns:
   all:
     do:
     - with:
-        var: "foo"
-        value: '{{ printf "%s %s" (.V "foo") "world" }}'
+        foo: '{{ printf "%s %s" (.V "foo") "world" }}'
     - sh:
         run: echo {{.V "foo"}}
 ```
@@ -168,8 +167,7 @@ fns:
     - sh:
         run: echo {{.V "foo"}}
     - with:
-        var: "foo"
-        value: '{{ printf "%s %s" (.V "foo") "world" }}'
+        foo: '{{ printf "%s %s" (.V "foo") "world" }}'
     - sh:
         run: echo {{.V "foo"}}
 ```
