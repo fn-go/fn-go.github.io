@@ -5,7 +5,8 @@
   "scripts": {
     "docusaurus": "docusaurus",
     "start": "docusaurus start",
-    "build": "rm -rf ./docs && docusaurus build --out-dir docs && printf \"%b\" \"fngo.dev\" > ./docs/CNAME",
+    "build": "docusaurus build",
+    "deploy": "./hack/deploy.sh",
     "swizzle": "docusaurus swizzle",
     "clear": "docusaurus clear",
     "serve": "docusaurus serve",
